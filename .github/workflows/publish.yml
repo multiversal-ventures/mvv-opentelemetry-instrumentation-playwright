@@ -51,3 +51,7 @@ jobs:
         merge-multiple: true
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+    - name: Attach Artifact to GitHub Releases
+      run: gh release upload ${{ github.ref_name }} ./dist/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN  }}
