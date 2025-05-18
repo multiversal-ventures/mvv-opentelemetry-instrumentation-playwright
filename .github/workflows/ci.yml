@@ -49,5 +49,7 @@ jobs:
         run: uv sync --locked
       - name: Typechecking
         run: uv run pyright .
+      - name: Install Playwright
+        run: uv run playwright install --with-deps chromium
       - name: Test
         run: uv run pytest -v .
