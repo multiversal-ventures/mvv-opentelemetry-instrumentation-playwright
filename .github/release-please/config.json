@@ -1,0 +1,15 @@
+{
+    "bootstrap-sha": "8676605",
+    "release-type": "python",
+    "prerelease": true,
+    "always-update": true,
+    "tag-separator": "v",
+    "packages": {
+        ".": {
+            "extra-files": [
+                "src/opentelemetry/instrumentation/playwright/__init__.py"
+            ]
+        }
+    },
+    "$schema": "https://raw.githubusercontent.com/googleapis/release-please/refs/heads/main/schemas/config.json"
+}

@@ -21,7 +21,7 @@ from playwright._impl._sync_base import SyncContextManager
 from .targets import METHODS, AttrConstructor
 
 __all__ = ["PlaywrightInstrumentor"]
-__version__ = "0.1.0"
+__version__ = "0.0.0"
 
 
 class _InstrumentationArgs(TypedDict, total=False):
