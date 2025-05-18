@@ -1,11 +1,15 @@
+import time
 import tomllib
 from pathlib import Path
+from typing import Callable
 
 import pytest
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
 
 from opentelemetry.instrumentation.playwright import PlaywrightInstrumentor
+
+from .conftest import DataPoint, DataPoints, InMemoryMeterProvider
 
 ROOT_DIR = next(p for p in Path(__file__).parents if p.joinpath("uv.lock").exists())
 
@@ -34,7 +38,7 @@ def test_instrumentation_is_valid(instrumentor: PlaywrightInstrumentor):
     instrumentor.instrument()
 
 
-def test_instrument_a_method(
+def test_trace_a_method(
     instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
 ):
     instrumentor._patch(DummyClass, "dummy_func", {"a": str})
@@ -55,7 +59,7 @@ def test_invalid_attrs_raise_errors(instrumentor: PlaywrightInstrumentor):
 
 
 @pytest.mark.asyncio
-async def test_instrument_an_async_method(
+async def test_trace_an_async_method(
     instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
 ):
     instrumentor._patch(DummyClass, "dummy_func_async", {"a": str})
@@ -87,7 +91,7 @@ def test_clear_instrumentation(
     assert otel_exporter.get_finished_spans() == spans
 
 
-def test_sync_context_manager_span(
+def test_trace_sync_context_manager(
     instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
 ):
     class DummySyncContextManager:
@@ -107,7 +111,7 @@ def test_sync_context_manager_span(
     assert span.status.status_code == StatusCode.UNSET
 
 
-def test_sync_context_manager_span_error(
+def test_trace_sync_context_manager_error(
     instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
 ):
     class DummySyncContextManager:
@@ -132,7 +136,7 @@ def test_sync_context_manager_span_error(
 
 
 @pytest.mark.asyncio
-async def test_async_context_manager_span(
+async def test_trace_async_context_manager(
     instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
 ):
     class DummyAsyncContextManager:
@@ -153,7 +157,7 @@ async def test_async_context_manager_span(
 
 
 @pytest.mark.asyncio
-async def test_async_context_manager_span_error(
+async def test_trace_async_context_manager_error(
     instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
 ):
     class DummyAsyncContextManager:
@@ -177,3 +181,111 @@ async def test_async_context_manager_span_error(
     assert (
         span.status.description is not None and "fail async" in span.status.description
     )
+
+
+@pytest.mark.asyncio
+async def test_metrics_emitted_on_async_method_calls(
+    instrumentor: PlaywrightInstrumentor,
+    otel_meter_provider: InMemoryMeterProvider,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(time, "monotonic", monotonic())
+    instrumentor._patch(DummyClass, "dummy_func_async", {"a": str})
+
+    dummy = DummyClass()
+    await dummy.dummy_func_async("a", 1)
+
+    data_points = [dp for dp in otel_meter_provider.data_points if dp.values]
+
+    assert data_points == [
+        DataPoints(
+            name="playwright.method.calls",
+            unit="1",
+            description="Number of Playwright method calls",
+            values=[
+                DataPoint(
+                    value=1,
+                    attributes={
+                        "class": "tests.test_instrumentor.DummyClass",
+                        "method": "dummy_func_async",
+                        "sync_async": "async",
+                    },
+                )
+            ],
+        ),
+        DataPoints(
+            name="playwright.method.duration",
+            unit="ms",
+            description="Duration of Playwright method calls",
+            values=[
+                DataPoint(
+                    value=1000,
+                    attributes={
+                        "class": "tests.test_instrumentor.DummyClass",
+                        "method": "dummy_func_async",
+                        "sync_async": "async",
+                        "success": True,
+                    },
+                )
+            ],
+        ),
+    ]
+
+
+def test_metrics_emitted_on_sync_method_calls(
+    instrumentor: PlaywrightInstrumentor,
+    otel_meter_provider: InMemoryMeterProvider,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(time, "monotonic", monotonic())
+    instrumentor._patch(DummyClass, "dummy_func", {"a": str})
+
+    dummy = DummyClass()
+    dummy.dummy_func("a", 1)
+
+    data_points = [dp for dp in otel_meter_provider.data_points if dp.values]
+
+    assert data_points == [
+        DataPoints(
+            name="playwright.method.calls",
+            unit="1",
+            description="Number of Playwright method calls",
+            values=[
+                DataPoint(
+                    value=1,
+                    attributes={
+                        "class": "tests.test_instrumentor.DummyClass",
+                        "method": "dummy_func",
+                        "sync_async": "sync",
+                    },
+                )
+            ],
+        ),
+        DataPoints(
+            name="playwright.method.duration",
+            unit="ms",
+            description="Duration of Playwright method calls",
+            values=[
+                DataPoint(
+                    value=1000,
+                    attributes={
+                        "class": "tests.test_instrumentor.DummyClass",
+                        "method": "dummy_func",
+                        "sync_async": "sync",
+                        "success": True,
+                    },
+                )
+            ],
+        ),
+    ]
+
+
+def monotonic() -> Callable[[], float]:
+    counter = 0
+
+    def _monotonic():
+        nonlocal counter
+        counter += 1
+        return counter
+
+    return _monotonic

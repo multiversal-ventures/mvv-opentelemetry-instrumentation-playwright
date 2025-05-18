@@ -1,4 +1,5 @@
 import inspect
+import time
 from collections.abc import Callable, Collection
 from contextlib import ExitStack
 from functools import wraps
@@ -6,7 +7,7 @@ from typing import Any, ParamSpec, Type, TypedDict, TypeVar, Unpack, override
 from unittest.mock import patch
 
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
-from opentelemetry.metrics import MeterProvider, get_meter_provider
+from opentelemetry.metrics import MeterProvider, get_meter, get_meter_provider
 from opentelemetry.trace import (
     Span,
     StatusCode,
@@ -34,22 +35,50 @@ _Ret = TypeVar("_Ret")
 
 
 class PlaywrightInstrumentor(BaseInstrumentor):
-    def __init__(self):
+    def __init__(
+        self,
+        tracer_provider: TracerProvider | None = None,
+        meter_provider: MeterProvider | None = None,
+    ):
         self._exit_stack = ExitStack()
-        self._tracer_provider: TracerProvider = get_tracer_provider()
-        self._meter_provider: MeterProvider = get_meter_provider()
+        self._tracer_provider: TracerProvider = tracer_provider or get_tracer_provider()
+        self._meter_provider: MeterProvider = meter_provider or get_meter_provider()
+        self._meter = self._meter_provider.get_meter(
+            "opentelemetry.instrumentation.playwright",
+            __version__,
+        )
+        self._method_calls_counter = self._meter.create_counter(
+            name="playwright.method.calls",
+            unit="1",
+            description="Number of Playwright method calls",
+        )
+        self._method_duration_hist = self._meter.create_histogram(
+            name="playwright.method.duration",
+            unit="ms",
+            description="Duration of Playwright method calls",
+        )
+        self._method_errors_counter = self._meter.create_counter(
+            name="playwright.method.errors",
+            unit="1",
+            description="Number of Playwright method errors",
+        )
+        self._session_starts_counter = self._meter.create_counter(
+            name="playwright.session.starts",
+            unit="1",
+            description="Number of Playwright session/context/page starts",
+        )
+        self._session_duration_hist = self._meter.create_histogram(
+            name="playwright.session.duration",
+            unit="ms",
+            description="Duration of Playwright session/context/page lifetimes",
+        )
 
     @override
     def instrumentation_dependencies(self) -> Collection[str]:
         return ["playwright~=1.52.0"]
 
     @override
-    def _instrument(self, **kwargs: Unpack[_InstrumentationArgs]):
-        if tp := kwargs.get("tracer_provider"):
-            self._tracer_provider = tp
-        if mp := kwargs.get("meter_provider"):
-            self._meter_provider = mp
-
+    def _instrument(self, **kwargs: Any):
         for parent, methods in METHODS.items():
             for method, attrs in methods:
                 self._patch(parent, method, attrs)
@@ -87,25 +116,66 @@ class PlaywrightInstrumentor(BaseInstrumentor):
         assert isinstance(func, Callable)
         get_attrs = _attr_maker(func, attrs)
         span_name = _type_name(parent) + ":" + func.__name__
+        class_name = _type_name(parent)
+        method_name = func.__name__
+        is_async = inspect.iscoroutinefunction(func)
+
+        def _metric_attrs():
+            return {
+                "class": class_name,
+                "method": method_name,
+                "sync_async": "async" if is_async else "sync",
+            }
 
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            with self.tracer.start_as_current_span(
-                name=span_name,
-                attributes=get_attrs(*args, **kwargs),
-            ):
-                return func(*args, **kwargs)
+            metric_attrs = _metric_attrs()
+            self._method_calls_counter.add(1, metric_attrs)
+            start = time.monotonic()
+            try:
+                with self.tracer.start_as_current_span(
+                    name=span_name,
+                    attributes=get_attrs(*args, **kwargs),
+                ):
+                    result = func(*args, **kwargs)
+                self._method_duration_hist.record(
+                    (time.monotonic() - start) * 1000, metric_attrs | {"success": True}
+                )
+                return result
+            except Exception as exc:
+                self._method_errors_counter.add(
+                    1, metric_attrs | {"error_type": type(exc).__name__}
+                )
+                self._method_duration_hist.record(
+                    (time.monotonic() - start) * 1000, metric_attrs | {"success": False}
+                )
+                raise
 
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            with self.tracer.start_as_current_span(
-                name=span_name,
-                attributes=get_attrs(*args, **kwargs),
-            ):
-                return await func(*args, **kwargs)
+            metric_attrs = _metric_attrs()
+            self._method_calls_counter.add(1, metric_attrs)
+            start = time.monotonic()
+            try:
+                with self.tracer.start_as_current_span(
+                    name=span_name,
+                    attributes=get_attrs(*args, **kwargs),
+                ):
+                    result = await func(*args, **kwargs)
+                self._method_duration_hist.record(
+                    (time.monotonic() - start) * 1000, metric_attrs | {"success": True}
+                )
+                return result
+            except Exception as exc:
+                self._method_errors_counter.add(
+                    1, metric_attrs | {"error_type": type(exc).__name__}
+                )
+                self._method_duration_hist.record(
+                    (time.monotonic() - start) * 1000, metric_attrs | {"success": False}
+                )
+                raise
 
-        wrapper = async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
-
+        wrapper = async_wrapper if is_async else sync_wrapper
         self._exit_stack.enter_context(patch.object(parent, method, wrapper))
 
     @property
@@ -118,11 +188,14 @@ class PlaywrightInstrumentor(BaseInstrumentor):
     def _patch_context_manager(self, base_cls: Type):
         orig_enter = base_cls.__enter__
         orig_exit = base_cls.__exit__
+        tracer = self.tracer
 
         @wraps(orig_enter)
         def enter_wrapper(self_, *args, **kwargs):
-            span_name = f"{type(self_).__module__}.{type(self_).__qualname__}:__enter__"
-            tracer = self.tracer
+            type_name = _type_name(type(self_))
+            span_name = f"{type_name}:__enter__"
+            self._session_starts_counter.add(1, {"type": type_name})
+            self_._otel_session_start = time.monotonic()
             span_ctx = tracer.start_as_current_span(span_name)
             span = span_ctx.__enter__()
             self_._otel_span_ctx = span_ctx
@@ -138,6 +211,12 @@ class PlaywrightInstrumentor(BaseInstrumentor):
 
         @wraps(orig_exit)
         def exit_wrapper(self_, exc_type, exc_val, exc_tb):
+            if hasattr(self_, "_otel_session_start"):
+                duration = (time.monotonic() - self_._otel_session_start) * 1000
+                self._session_duration_hist.record(
+                    duration, {"type": _type_name(type(self_))}
+                )
+                del self_._otel_session_start
             if hasattr(self_, "_otel_span"):
                 span = self_._otel_span
                 if exc_type is not None:
@@ -149,6 +228,8 @@ class PlaywrightInstrumentor(BaseInstrumentor):
                 del self_._otel_span_ctx
             return orig_exit(self_, exc_type, exc_val, exc_tb)
 
+        # Attach a reference to the instrumentor for metrics
+        base_cls._instrumentor = self
         self._exit_stack.enter_context(
             patch.object(base_cls, "__enter__", enter_wrapper)
         )
@@ -157,13 +238,14 @@ class PlaywrightInstrumentor(BaseInstrumentor):
     def _patch_async_context_manager(self, base_cls: Type):
         orig_aenter = base_cls.__aenter__
         orig_aexit = base_cls.__aexit__
+        tracer = self.tracer
 
         @wraps(orig_aenter)
         async def aenter_wrapper(self_, *args, **kwargs):
-            span_name = (
-                f"{type(self_).__module__}.{type(self_).__qualname__}:__aenter__"
-            )
-            tracer = self.tracer
+            type_name = _type_name(type(self_))
+            span_name = f"{type_name}:__aenter__"
+            self._session_starts_counter.add(1, {"type": type_name})
+            self_._otel_session_start = time.monotonic()
             span_cm = tracer.start_as_current_span(span_name)
             span = span_cm.__enter__()
             self_._otel_span_cm = span_cm
@@ -176,6 +258,12 @@ class PlaywrightInstrumentor(BaseInstrumentor):
 
         @wraps(orig_aexit)
         async def aexit_wrapper(self_, exc_type, exc_val, exc_tb):
+            if hasattr(self_, "_otel_session_start"):
+                duration = (time.monotonic() - self_._otel_session_start) * 1000
+                self._session_duration_hist.record(
+                    duration, {"type": _type_name(type(self_))}
+                )
+                del self_._otel_session_start
             if hasattr(self_, "_otel_span"):
                 span: Span = self_._otel_span
                 if exc_type is not None:
@@ -187,6 +275,8 @@ class PlaywrightInstrumentor(BaseInstrumentor):
                 del self_._otel_span_cm
             return await orig_aexit(self_, exc_type, exc_val, exc_tb)
 
+        # Attach a reference to the instrumentor for metrics
+        base_cls._instrumentor = self
         self._exit_stack.enter_context(
             patch.object(base_cls, "__aenter__", aenter_wrapper)
         )
