@@ -2,40 +2,12 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import (
-    SimpleSpanProcessor,
-)
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 
 from opentelemetry.instrumentation.playwright import PlaywrightInstrumentor
 
 ROOT_DIR = next(p for p in Path(__file__).parents if p.joinpath("uv.lock").exists())
-
-
-@pytest.fixture(scope="function")
-def provider():
-    return TracerProvider()
-
-
-@pytest.fixture(scope="function")
-def otel_exporter(provider: TracerProvider):
-    exporter = InMemorySpanExporter()
-    span_processor = SimpleSpanProcessor(exporter)
-    provider.add_span_processor(span_processor)
-    yield exporter
-    exporter.clear()
-
-
-@pytest.fixture(scope="function")
-def instrumentor(provider: TracerProvider):
-    instrumentor = PlaywrightInstrumentor()
-    instrumentor._tracer_provider = provider
-
-    try:
-        yield instrumentor
-    finally:
-        instrumentor._uninstrument()
 
 
 class DummyClass:
@@ -73,7 +45,7 @@ def test_instrument_a_method(
     spans = otel_exporter.get_finished_spans()
     assert len(spans) == 1
     span = spans[0]
-    assert span.name == "test_instrumentor.DummyClass:dummy_func"
+    assert span.name == "tests.test_instrumentor.DummyClass:dummy_func"
     assert span.attributes == {"a": "a"}
 
 
@@ -94,7 +66,7 @@ async def test_instrument_an_async_method(
     spans = otel_exporter.get_finished_spans()
     assert len(spans) == 1
     span = spans[0]
-    assert span.name == "test_instrumentor.DummyClass:dummy_func_async"
+    assert span.name == "tests.test_instrumentor.DummyClass:dummy_func_async"
     assert span.attributes == {"a": "a"}
 
 
@@ -113,3 +85,95 @@ def test_clear_instrumentation(
     instrumentor._uninstrument()
     dummy.dummy_func("a", 1)
     assert otel_exporter.get_finished_spans() == spans
+
+
+def test_sync_context_manager_span(
+    instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
+):
+    class DummySyncContextManager:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    instrumentor._patch_context_manager(DummySyncContextManager)
+    with DummySyncContextManager():
+        pass
+    spans = otel_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span.name.endswith(":__enter__")
+    assert span.status.status_code == StatusCode.UNSET
+
+
+def test_sync_context_manager_span_error(
+    instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
+):
+    class DummySyncContextManager:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    instrumentor._patch_context_manager(DummySyncContextManager)
+    otel_exporter.clear()
+    try:
+        with DummySyncContextManager():
+            raise ValueError("fail")
+    except ValueError:
+        pass
+    spans = otel_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span.status.status_code == StatusCode.ERROR
+    assert span.status.description is not None and "fail" in span.status.description
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_span(
+    instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
+):
+    class DummyAsyncContextManager:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    instrumentor._patch_async_context_manager(DummyAsyncContextManager)
+    async with DummyAsyncContextManager():
+        pass
+    spans = otel_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span.name.endswith(":__aenter__")
+    assert span.status.status_code == StatusCode.UNSET
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_span_error(
+    instrumentor: PlaywrightInstrumentor, otel_exporter: InMemorySpanExporter
+):
+    class DummyAsyncContextManager:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    instrumentor._patch_async_context_manager(DummyAsyncContextManager)
+    otel_exporter.clear()
+    try:
+        async with DummyAsyncContextManager():
+            raise ValueError("fail async")
+    except ValueError:
+        pass
+    spans = otel_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span.status.status_code == StatusCode.ERROR
+    assert (
+        span.status.description is not None and "fail async" in span.status.description
+    )

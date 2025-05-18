@@ -155,6 +155,7 @@ dev = [
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-insta" },
 ]
 
 [package.metadata]
@@ -172,6 +173,7 @@ dev = [
     { name = "pyright", specifier = ">=1.1.400" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-asyncio", specifier = ">=0.26.0" },
+    { name = "pytest-insta", specifier = ">=0.3.0" },
 ]
 
 [[package]]
@@ -368,6 +370,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8e/c4/453c52c659521066969523e87d85d54139bbd17b78f09532fb8eb8cdb58e/pytest_asyncio-0.26.0.tar.gz", hash = "sha256:c4df2a697648241ff39e7f0e4a73050b03f123f760673956cf0d72a4990e312f", size = 54156, upload_time = "2025-03-25T06:22:28.883Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/7f/338843f449ace853647ace35870874f69a764d251872ed1b4de9f234822c/pytest_asyncio-0.26.0-py3-none-any.whl", hash = "sha256:7b51ed894f4fbea1340262bdae5135797ebbe21d8638978e35d31c6d19f72fb0", size = 19694, upload_time = "2025-03-25T06:22:27.807Z" },
+]
+
+[[package]]
+name = "pytest-insta"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+    { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/5b/6ca4baca60c3f8361415501668cde3abd94dbad44293325833fd89d1a7c1/pytest_insta-0.3.0.tar.gz", hash = "sha256:9e6e1c70a021f68ccc4643360b2c2f8326cf3befba85f942c1da17b9caf713f7", size = 14960, upload_time = "2024-02-19T23:00:22.014Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/d5/1459b2861cf703cf49d96b6f29731ee74f4ac7e34b0c60b0ff75bdd318bc/pytest_insta-0.3.0-py3-none-any.whl", hash = "sha256:93a105e3850f2887b120a581923b10bb313d722e00d369377a1d91aa535df704", size = 13660, upload_time = "2024-02-19T23:00:20.054Z" },
 ]
 
 [[package]]

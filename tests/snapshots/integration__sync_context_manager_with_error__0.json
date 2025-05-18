@@ -1,0 +1,22 @@
+[
+  {
+    "name": "playwright.sync_api._generated.BrowserType:launch",
+    "status": null,
+    "attributes": {
+      "headless": true
+    }
+  },
+  {
+    "name": "playwright.sync_api._generated.Browser:__enter__",
+    "status": {
+      "status_code": "ERROR",
+      "description": "An error occurred"
+    },
+    "attributes": {}
+  },
+  {
+    "name": "playwright.sync_api._generated.Browser:close",
+    "status": null,
+    "attributes": {}
+  }
+]

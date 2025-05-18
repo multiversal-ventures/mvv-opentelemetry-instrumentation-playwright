@@ -7,8 +7,16 @@ from unittest.mock import patch
 
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.metrics import MeterProvider, get_meter_provider
-from opentelemetry.trace import Tracer, TracerProvider, get_tracer_provider
+from opentelemetry.trace import (
+    Span,
+    StatusCode,
+    Tracer,
+    TracerProvider,
+    get_tracer_provider,
+)
 from opentelemetry.util.types import Attributes
+from playwright._impl._async_base import AsyncContextManager
+from playwright._impl._sync_base import SyncContextManager
 
 from .targets import METHODS, AttrConstructor
 
@@ -45,6 +53,9 @@ class PlaywrightInstrumentor(BaseInstrumentor):
         for parent, methods in METHODS.items():
             for method, attrs in methods:
                 self._patch(parent, method, attrs)
+
+        self._patch_context_manager(SyncContextManager)
+        self._patch_async_context_manager(AsyncContextManager)
 
     @override
     def _uninstrument(self, **kwargs: Any):
@@ -102,6 +113,85 @@ class PlaywrightInstrumentor(BaseInstrumentor):
         return self._tracer_provider.get_tracer(
             __name__,
             __version__,
+        )
+
+    def _patch_context_manager(self, base_cls: Type):
+        orig_enter = base_cls.__enter__
+        orig_exit = base_cls.__exit__
+
+        @wraps(orig_enter)
+        def enter_wrapper(self_, *args, **kwargs):
+            span_name = f"{type(self_).__module__}.{type(self_).__qualname__}:__enter__"
+            tracer = self.tracer
+            span_ctx = tracer.start_as_current_span(span_name)
+            span = span_ctx.__enter__()
+            self_._otel_span_ctx = span_ctx
+            self_._otel_span = span
+            try:
+                return orig_enter(self_, *args, **kwargs)
+            except Exception as exc:
+                span.set_status(StatusCode.ERROR, str(exc))
+                span.end()
+                del self_._otel_span_ctx
+                del self_._otel_span
+                raise
+
+        @wraps(orig_exit)
+        def exit_wrapper(self_, exc_type, exc_val, exc_tb):
+            if hasattr(self_, "_otel_span"):
+                span = self_._otel_span
+                if exc_type is not None:
+                    span.set_status(StatusCode.ERROR, str(exc_val))
+                span.end()
+                del self_._otel_span
+            if hasattr(self_, "_otel_span_ctx"):
+                self_._otel_span_ctx.__exit__(exc_type, exc_val, exc_tb)
+                del self_._otel_span_ctx
+            return orig_exit(self_, exc_type, exc_val, exc_tb)
+
+        self._exit_stack.enter_context(
+            patch.object(base_cls, "__enter__", enter_wrapper)
+        )
+        self._exit_stack.enter_context(patch.object(base_cls, "__exit__", exit_wrapper))
+
+    def _patch_async_context_manager(self, base_cls: Type):
+        orig_aenter = base_cls.__aenter__
+        orig_aexit = base_cls.__aexit__
+
+        @wraps(orig_aenter)
+        async def aenter_wrapper(self_, *args, **kwargs):
+            span_name = (
+                f"{type(self_).__module__}.{type(self_).__qualname__}:__aenter__"
+            )
+            tracer = self.tracer
+            span_cm = tracer.start_as_current_span(span_name)
+            span = span_cm.__enter__()
+            self_._otel_span_cm = span_cm
+            self_._otel_span = span
+            try:
+                return await orig_aenter(self_, *args, **kwargs)
+            except Exception as exc:
+                span.set_status(StatusCode.ERROR, str(exc))
+                raise
+
+        @wraps(orig_aexit)
+        async def aexit_wrapper(self_, exc_type, exc_val, exc_tb):
+            if hasattr(self_, "_otel_span"):
+                span: Span = self_._otel_span
+                if exc_type is not None:
+                    span.set_status(StatusCode.ERROR, str(exc_val))
+                span.end()
+                del self_._otel_span
+            if hasattr(self_, "_otel_span_cm"):
+                self_._otel_span_cm.__exit__(exc_type, exc_val, exc_tb)
+                del self_._otel_span_cm
+            return await orig_aexit(self_, exc_type, exc_val, exc_tb)
+
+        self._exit_stack.enter_context(
+            patch.object(base_cls, "__aenter__", aenter_wrapper)
+        )
+        self._exit_stack.enter_context(
+            patch.object(base_cls, "__aexit__", aexit_wrapper)
         )
 
 
