@@ -1,7 +1,6 @@
 [
   {
     "name": "playwright.async_api._generated.BrowserType:launch",
-    "status": null,
     "attributes": {
       "headless": true
     }
@@ -11,12 +10,9 @@
     "status": {
       "status_code": "ERROR",
       "description": "An error occurred"
-    },
-    "attributes": {}
+    }
   },
   {
-    "name": "playwright.async_api._generated.Browser:close",
-    "status": null,
-    "attributes": {}
+    "name": "playwright.async_api._generated.Browser:close"
   }
 ]

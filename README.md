@@ -45,6 +45,19 @@ with playwright.sync_api.sync_playwright() as p:
             print("Page title:", title)
 ```
 
+This will emit spans like the following:
+
+
+```text
+├── playwright.sync_api._generated.BrowserType:launch {headless: true}
+├── playwright.sync_api._generated.Browser:__enter__
+|   ├── playwright.sync_api._generated.Browser:new_page {user_agent: "test", is_mobile: false}
+|   ├── playwright.sync_api._generated.Page:__enter__
+|   |   └── playwright.sync_api._generated.Page:title
+|   └── playwright.sync_api._generated.Page:close
+└── playwright.sync_api._generated.Browser:close
+```
+
 You can pass a custom tracer or meter provider:
 
 ```python

@@ -96,8 +96,11 @@ async def test_async_context_manager_with_error(
 
 
 def spans(spans: Iterable[ReadableSpan]) -> list[dict[str, Any]]:
-    return [
-        {
+    # First build a mapping of span ID to span info
+    span_map = {}
+    for span in spans:
+        assert span.context is not None
+        span_map[span.context.span_id] = {
             "name": span.name,
             "status": (
                 {
@@ -108,6 +111,39 @@ def spans(spans: Iterable[ReadableSpan]) -> list[dict[str, Any]]:
                 else None
             ),
             "attributes": {k: v for k, v in (span.attributes or {}).items()},
+            "children": [],
+            "start_time": span.start_time or 0,
+            "parent_id": span.parent.span_id if span.parent else None,
         }
-        for span in sorted(spans, key=lambda s: s.start_time or 0)
-    ]
+
+    # Build trees by connecting parents and children
+    roots = []
+    for span_id, info in span_map.items():
+        if info["parent_id"] is None:
+            roots.append(info)
+        else:
+            parent = span_map.get(info["parent_id"])
+            if parent:
+                parent["children"].append(info)
+
+    # Sort roots and children by start time
+    def sort_and_cleanup(span_info):
+        span_info["children"].sort(key=lambda x: x["start_time"])
+        for child in span_info["children"]:
+            sort_and_cleanup(child)
+        # Remove temporary fields used for sorting/linking
+        del span_info["start_time"]
+        del span_info["parent_id"]
+        # Only include non-empty fields
+        if not span_info["attributes"]:
+            del span_info["attributes"]
+        if not span_info["children"]:
+            del span_info["children"]
+        if span_info["status"] is None:
+            del span_info["status"]
+
+    roots.sort(key=lambda x: x["start_time"])
+    for info in roots:
+        sort_and_cleanup(info)
+
+    return roots
