@@ -1,17 +1,36 @@
 [project]
 name = "mvv-opentelemetry-instrumentation-playwright"
 version = "0.1.0"
-description = "Add your description here"
+description = "Automatic tracing and metrics for your Playwright browser automation scripts using OpenTelemetry."
 readme = "README.md"
 authors = [
     { name = "Michael-F-Bryan", email = "michael@multiversal.ventures" }
 ]
+license = {file = "LICENSE.md"}
 requires-python = ">=3.13"
 dependencies = [
     "opentelemetry-api>=1.33.1",
     "opentelemetry-instrumentation>=0.54b1",
     "playwright~=1.52.0",
 ]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
+keywords = [
+    "opentelemetry",
+    "playwright",
+    "instrumentation",
+    "tracing",
+    "metrics",
+]
+
+[project.urls]
+Homepage = "https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright"
+Repository = "https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright"
+Issues = "https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/issues"
+Changelog = "https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/releases"
 
 [project.entry-points.opentelemetry_instrumentor]
 playwright = "opentelemetry.instrumentation.playwright:PlaywrightInstrumentor"
