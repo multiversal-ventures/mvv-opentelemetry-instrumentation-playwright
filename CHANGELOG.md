@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/compare/v0.1.1...v0.1.2) (2025-05-28)
+
+
+### Miscellaneous Chores
+
+* Bump the version to trigger a new release ([bae722d](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/commit/bae722d7517aedd06047ae4b9132a8ad11bd9f5d))
+
 ## [0.1.1](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/compare/v0.1.0...v0.1.1) (2025-05-28)
 
 
