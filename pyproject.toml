@@ -1,6 +1,6 @@
 [project]
 name = "mvv-opentelemetry-instrumentation-playwright"
-version = "0.0.0"
+version = "0.1.0"
 description = "Automatic tracing and metrics for your Playwright browser automation scripts using OpenTelemetry."
 readme = "README.md"
 authors = [
