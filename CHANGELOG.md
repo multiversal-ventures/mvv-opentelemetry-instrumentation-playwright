@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/compare/v0.1.3...v0.1.4) (2025-09-22)
+
+
+### Bug Fixes
+
+* The list of annotated methods (and their arguments) are now discovered dynamically so we are always compatible with the current version of playwright ([ac297ef](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/commit/ac297ef83f2df4a30bd0c46893a38f6164e0c035))
+
 ## [0.1.3](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/compare/v0.1.2...v0.1.3) (2025-09-22)
 
 
