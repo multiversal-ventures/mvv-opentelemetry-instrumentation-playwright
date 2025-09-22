@@ -1,6 +1,6 @@
 import inspect
 import time
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from contextlib import ExitStack
 from functools import wraps
 from typing import Any, ParamSpec, Type, TypedDict, TypeVar, Unpack, override
@@ -19,7 +19,7 @@ from opentelemetry.util.types import Attributes
 from playwright._impl._async_base import AsyncContextManager
 from playwright._impl._sync_base import SyncContextManager
 
-from .targets import METHODS, AttrConstructor
+from .targets import AttrConstructor, annotated_methods
 
 __all__ = ["PlaywrightInstrumentor"]
 __version__ = "0.0.0"
@@ -79,9 +79,9 @@ class PlaywrightInstrumentor(BaseInstrumentor):
 
     @override
     def _instrument(self, **kwargs: Any):
-        for parent, methods in METHODS.items():
-            for method, attrs in methods:
-                self._patch(parent, method, attrs)
+        for parent, methods in annotated_methods().items():
+            for m in methods:
+                self._patch(parent, m.name, m.attrs)
 
         self._patch_context_manager(SyncContextManager)
         self._patch_async_context_manager(AsyncContextManager)
@@ -92,8 +92,9 @@ class PlaywrightInstrumentor(BaseInstrumentor):
         # instrumentor back to a usable state.
         self._exit_stack.pop_all().close()
 
-    def _patch(self, parent: Type, method: str, attrs: dict[str, AttrConstructor]):
-        """Patches a method on a Playwright class to add OpenTelemetry instrumentation.
+    def _patch(self, parent: Type, method: str, attrs: Mapping[str, AttrConstructor]):
+        """
+        Patches a method on a Playwright class to add OpenTelemetry instrumentation.
 
         This is the core instrumentation function that:
         1. Gets the original method from the parent class
@@ -286,7 +287,7 @@ class PlaywrightInstrumentor(BaseInstrumentor):
 
 
 def _attr_maker(
-    func: Callable, attributes: dict[str, AttrConstructor]
+    func: Callable, attributes: Mapping[str, AttrConstructor]
 ) -> Callable[..., Attributes]:
     """
     Get a callable which, when called with the same arguments as the original
@@ -300,7 +301,7 @@ def _attr_maker(
     for attr_name in attributes:
         assert (
             attr_name in signature.parameters
-        ), f"Argument '{attr_name}' not found in {func.__name__}{signature}"
+        ), f"Argument '{attr_name}' not found in {func.__qualname__}{signature}"
 
     def maker(*args: Any, **kwargs: Any) -> Attributes:
         bound = signature.bind(*args, **kwargs)
