@@ -175,7 +175,7 @@ dev = [
 requires-dist = [
     { name = "opentelemetry-api", specifier = ">=1.33.1" },
     { name = "opentelemetry-instrumentation", specifier = ">=0.54b1" },
-    { name = "playwright", specifier = "~=1.52.0" },
+    { name = "playwright", specifier = ">=1.52.0,<2.0.0" },
 ]
 
 [package.metadata.requires-dev]
