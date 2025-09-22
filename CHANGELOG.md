@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/compare/v0.1.2...v0.1.3) (2025-09-22)
+
+
+### Features
+
+* Relaxed the constraints on the playwright version ([97ee902](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/commit/97ee902a07e2e6942090b5ed3a270aca195de511))
+
 ## [0.1.2](https://github.com/multiversal-ventures/mvv-opentelemetry-instrumentation-playwright/compare/v0.1.1...v0.1.2) (2025-05-28)
 
 
