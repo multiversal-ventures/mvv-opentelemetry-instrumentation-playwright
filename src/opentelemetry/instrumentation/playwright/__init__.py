@@ -75,7 +75,7 @@ class PlaywrightInstrumentor(BaseInstrumentor):
 
     @override
     def instrumentation_dependencies(self) -> Collection[str]:
-        return ["playwright~=1.52.0"]
+        return ["playwright>=1.52.0,<2.0.0"]
 
     @override
     def _instrument(self, **kwargs: Any):
