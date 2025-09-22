@@ -7,7 +7,6 @@ import pytest
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
-from opentelemetry.util.types import Attributes
 from pytest_insta import SnapshotFixture
 
 from opentelemetry.instrumentation.playwright import PlaywrightInstrumentor

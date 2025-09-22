@@ -96,9 +96,9 @@ classes (sync and async):
 Common actions like `launch`, `new_page`, `goto`, `click`, `type`, `screenshot`,
 and many more are traced with relevant attributes.
 
-See the [`targets.py`](src/opentelemetry/instrumentation/playwright/targets.py)
-file for a full list of the methods that are instrumented, along with the
-parameters that will be attached to the Open Telemetry span as parameters.
+You can find the full list of methods that are instrumented with the
+`annotated_methods()` function from the
+`opentelemetry.instrumentation.playwright.targets` module.
 
 ## License
 
